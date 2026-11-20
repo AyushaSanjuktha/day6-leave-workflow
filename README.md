@@ -1,4 +1,5 @@
 # Day 6 Challenge: Leave Question Workflow (Python)
+n8n version of the same workflow: Day6_Leave_Workflow.json (import it in n8n with ⋯ → Import from file).
 
 A small AI workflow that answers leave questions from a policy, with a human approval before anything is sent.
 
