@@ -1,0 +1,329 @@
+{
+  "name": "Day6_Leave_Workflo",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "Leave question",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Question"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "4c45e63e-d96f-4180-ad2a-1070d5054429",
+      "name": "On form submission",
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.6,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "6d461d1d-45e8-4fec-b8ea-d3413d854111"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Find the policy sections that best match the question.\n\nconst policy = `SAMPLE LEAVE POLICY (made up, for training only)\n\n1. Leave types and balance\nEvery employee gets 12 days of casual leave (CL) and 8 days of sick leave (SL) per calendar year. Leave is credited on 1 January.\n\n2. Applying for leave\nApply for leave in the HR portal. Casual leave must be applied for at least 2 working days in advance. Sick leave can be applied on the same day, or within 2 working days after returning to work.\n\n3. Half-day leave\nHalf-day leave is allowed for both casual leave and sick leave.\n\n4. Approval\nThe reporting manager approves or rejects a leave request within 2 working days. If the manager is on leave, the request goes to the backup approver named in the HR portal.\n\n5. Balance limit and loss of pay\nAn employee cannot apply for more days than their available balance. Extra days are loss of pay (LOP), and only with HR approval.\n\n6. Cancelling leave\nApproved leave can be cancelled by the employee before the leave start date. The manager is notified by email.\n\n7. Carry-over of unused leave\nUp to 5 days of unused casual leave can be carried over to the next year. Carried-over days must be used by 31 March, or they lapse. Sick leave cannot be carried over.\n\n8. Leave during probation\nDuring the first 3 months (probation), employees can take sick leave only. Casual leave can be used from the fourth month.\n\n9. Leave during the notice period\nCasual leave during the notice period needs HR approval. Unused casual leave is not paid out when an employee leaves.\n\n10. Company holidays\nThere are 10 company holidays each year. The list is published in the HR portal every December. A company holiday that falls inside a leave period is not counted as leave.\n`;\n\nconst question = $input.first().json[\"Question\"];\n\n// Split the policy into numbered sections.\nconst sections = policy\n  .split(/\\n(?=\\d+\\.\\s)/)\n  .map(s => s.trim())\n  .filter(s => /^\\d+\\./.test(s));\n\n// Keep important words from the question.\nconst skip = new Set([\n  \"the\", \"and\", \"for\", \"can\", \"what\", \"how\", \"who\",\n  \"does\", \"will\", \"when\", \"with\", \"are\", \"you\", \"your\",\n  \"have\", \"any\", \"get\", \"much\", \"many\", \"there\", \"this\",\n  \"that\", \"from\", \"after\"\n]);\n\nconst words = (question.toLowerCase().match(/[a-z]+/g) || [])\n  .filter(w => w.length > 2 && !skip.has(w));\n\n// Score each section by matching question words.\nconst scored = sections.map(s => {\n  const text = s.toLowerCase();\n  const score = words.filter(w =>\n    text.includes(w.slice(0, 5))\n  ).length;\n\n  return { section: s, score };\n}).sort((a, b) => b.score - a.score);\n\n// Select the best two matching sections.\nconst best = scored\n  .filter(s => s.score > 0)\n  .slice(0, 2);\n\n// Return question and matching policy context.\nreturn [{\n  json: {\n    question,\n    context: best.length\n      ? best.map(s => s.section).join(\"\\n\\n\")\n      : \"NO MATCHING SECTION\"\n  }\n}];"
+      },
+      "id": "d1b0df4d-fab7-421a-a9b7-cfb6c865bc44",
+      "name": "Code in JavaScript",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are an HR assistant. Answer the employee's leave question using ONLY the policy sections below. If the sections do not contain the answer, say so and set confidence to low.\n\nQuestion: {{ $json.question }}\n\nPolicy sections:\n{{ $json.context }}\n\nReturn the answer, the source section title, and a confidence of high, medium or low.",
+        "hasOutputParser": true,
+        "batching": {}
+      },
+      "id": "dd10260d-120f-4390-af84-bb26f8b42155",
+      "name": "Basic LLM Chain",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        448,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "376f86c1-a8a6-4c78-a23b-8fe723d53919",
+      "name": "Google Gemini Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.2,
+      "position": [
+        336,
+        208
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "vlxf6kIp3RMdxUmg",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\n  \"answer\": \"Up to 5 days of unused casual leave can be carried over, and must be used by 31 March.\",\n  \"source_section\": \"7. Carry-over of unused leave\",\n  \"confidence\": \"high\"\n}",
+        "autoFix": true
+      },
+      "id": "17c61e11-af35-4bf4-a3e6-0fad535ab948",
+      "name": "Structured Output Parser",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        576,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "f4e3d433-bbf6-457e-9938-52961effbdad",
+      "name": "Google Gemini Chat Model1",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.2,
+      "position": [
+        624,
+        336
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "vlxf6kIp3RMdxUmg",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "sendAndWait",
+        "sendTo": "ayushasanjukthachekka@gmail.com",
+        "subject": "Leave Request – Approval Needed",
+        "message": "=A new employee leave question needs your approval.\n\nQuestion: {{ $('Code in JavaScript').item.json.question }}\n\nAnswer: {{ $json.output.answer }}\n\nSource Section: {{ $json.output.source_section }}\n\nConfidence: {{ $json.output.confidence }}\n",
+        "approvalOptions": {
+          "values": {
+            "approvalType": "double"
+          }
+        },
+        "options": {}
+      },
+      "id": "351ef3ed-8267-4017-a77c-cc1dd5f5b82f",
+      "name": "Send message and wait for response",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        816,
+        0
+      ],
+      "webhookId": "a889e5f3-e3c2-43ae-8215-9a44069a7c5a",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "qw4PV3hdlW63yvxb",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 4
+          },
+          "conditions": [
+            {
+              "id": "25d9f10b-68a3-4cb3-b223-3390ebcda035",
+              "leftValue": "={{ $json.data.approved }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [
+        1040,
+        0
+      ],
+      "id": "c76ae89a-7463-44c2-a673-3b503a25a98c",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://webhook.site/f1459366-3363-4b36-bcf7-005844be5f60",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "question",
+              "value": "=\t{{ $('Code in JavaScript').item.json.question }}"
+            },
+            {
+              "name": "answer",
+              "value": "={{ $('Basic LLM Chain').item.json.output.answer }}"
+            },
+            {
+              "name": "source_section",
+              "value": "={{ $('Basic LLM Chain').item.json.output.source_section }}"
+            },
+            {
+              "name": "status",
+              "value": "approved"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1264,
+        -32
+      ],
+      "id": "b7b16177-53df-41e0-b05a-b9dc51a1ca13",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1264,
+        176
+      ],
+      "id": "cbdf1b5a-4e6e-4130-bea2-d69a98fb092e",
+      "name": "Rejected: nothing sent"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "On form submission": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Basic LLM Chain": {
+      "main": [
+        [
+          {
+            "node": "Send message and wait for response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Structured Output Parser",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send message and wait for response": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Rejected: nothing sent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "1441fcd7-ef87-4eef-ade3-574fdac7ae0a",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "5e1e99840602e09bdc4b4ee6141fd414b0b9b4c40214667e16195b390b8e7ac9"
+  },
+  "nodeGroups": [],
+  "id": "B5qYxCwh6FSqAjqE",
+  "tags": []
+}
