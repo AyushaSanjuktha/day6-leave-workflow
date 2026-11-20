@@ -1,0 +1,6 @@
+#,question,correct_section,section_cited,correct,approved_or_rejected,reached_mock_api
+1,Can I carry over unused leave?,7,7. Carry-over of unused leave,Yes,Approved,Yes
+2,Who approves my leave if my manager is on leave?,4,4. Approval,Yes,Approved,Yes
+3,Can I take half a day of sick leave?,3,3. Half-day leave,Yes,Approved,Yes
+4,How many days in advance must I apply for casual leave?,2,2. Applying for leave,Yes,Approved,Yes
+5,What's the canteen menu today?,Not found,Not found,Yes,Rejected,No
